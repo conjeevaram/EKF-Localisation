@@ -7,8 +7,8 @@ int main() {
     // ---------------------------
     // simulation & visualization parameters
     // ---------------------------
-    const unsigned int WINDOW_WIDTH   = 600;
-    const unsigned int WINDOW_HEIGHT  = 600;
+    const unsigned int WINDOW_WIDTH   = 800; // updated for larger viewing area
+    const unsigned int WINDOW_HEIGHT  = 800; // updated for larger viewing area
     const unsigned int BITS_PER_PIXEL = 32;
     const std::string WINDOW_TITLE    = "Map & Sensor Visualization";
 
@@ -21,7 +21,10 @@ int main() {
     const float SIMULATION_SPEED = NUM_POINTS / SIMULATION_DURATION; // points per second
 
     const float SCALE   = 5.0f;                       // scale factor for visualization
-    const float Y_OFFSET = static_cast<float>(WINDOW_HEIGHT); // vertical offset
+    const float centerX = WINDOW_WIDTH / 2.0f;        // new center X coordinate
+    const float centerY = WINDOW_HEIGHT / 2.0f;       // new center Y coordinate
+    const float simCenterX = 60.0f;                   // simulation center X
+    const float simCenterY = 60.0f;                   // simulation center Y
 
     // ---------------------------
     // window setup
@@ -46,8 +49,8 @@ int main() {
         circle.setFillColor(sf::Color::Red);
         circle.setOrigin(sf::Vector2f(3.0f, 3.0f));
         circle.setPosition(sf::Vector2f(
-            pos.first * SCALE,
-            Y_OFFSET - (pos.second * SCALE)
+            (pos.first - simCenterX) * SCALE + centerX,   // shift X to center
+            centerY - ((pos.second - simCenterY) * SCALE) // shift Y (invert vertical)
         ));
         landmarkShapes.push_back(circle);
     }
@@ -58,8 +61,8 @@ int main() {
     sf::VertexArray groundTruthLine(sf::PrimitiveType::LineStrip, trajectory_points.size());
     for (size_t i = 0; i < trajectory_points.size(); ++i) {
         groundTruthLine[i].position = sf::Vector2f(
-            trajectory_points[i].first * SCALE,
-            Y_OFFSET - (trajectory_points[i].second * SCALE)
+            (trajectory_points[i].first - simCenterX) * SCALE + centerX,
+            centerY - ((trajectory_points[i].second - simCenterY) * SCALE)
         );
         groundTruthLine[i].color = sf::Color::Green;
     }
@@ -102,14 +105,14 @@ int main() {
             // get sensor reading
             std::pair<float, float> sensorReading = sensor.update({gt_x, gt_y}, TIME_STEP);
             
-            // store positions for rendering
+            // update positions using centered coordinate system
             currentGtPos = sf::Vector2f(
-                gt_x * SCALE,
-                Y_OFFSET - (gt_y * SCALE)
+                (gt_x - simCenterX) * SCALE + centerX,
+                centerY - ((gt_y - simCenterY) * SCALE)
             );
             currentSensorPos = sf::Vector2f(
-                sensorReading.first * SCALE,
-                Y_OFFSET - (sensorReading.second * SCALE)
+                (sensorReading.first - simCenterX) * SCALE + centerX,
+                centerY - ((sensorReading.second - simCenterY) * SCALE)
             );
 
             // add to point cloud

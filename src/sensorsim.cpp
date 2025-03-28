@@ -3,13 +3,13 @@
 #include <random>
 
 // maximum drift magnitude
-constexpr float DRIFT_SATURATION = 10.0f;
+constexpr float DRIFT_SATURATION = 15.0f;
 // linear drift growth rate (units per second)
 constexpr float DRIFT_RATE = 1.0f;
-constexpr float NOISE_STRENGTH = 3.0f;
+constexpr float NOISE_STRENGTH = 2.0f;
 
 //parameters for curved drift trajectory
-constexpr float CURVE_AMPLITUDE = 0.5f; // maximum angular deviation in radians (~28.6°)
+constexpr float CURVE_AMPLITUDE = 0.7f; // maximum angular deviation in radians (~28.6°)
 constexpr float CURVE_FREQUENCY = 0.2f; // oscillation frequency (radians per second)
 
 SensorSim::SensorSim(float driftStdDev, float measStdDev)
