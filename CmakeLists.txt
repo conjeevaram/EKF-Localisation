@@ -1,0 +1,31 @@
+cmake_minimum_required(VERSION 3.10)
+
+project(EKF-Localisation)
+
+# set the C++ standard.
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Point CMake to SFML's install location.
+set(CMAKE_PREFIX_PATH "/opt/homebrew/Cellar/sfml/3.0.0_1")
+
+# Find SFML package using SFML 3 with proper component names.
+find_package(SFML 3 COMPONENTS System Window Graphics Network Audio REQUIRED)
+
+# Add the include directory so that headers in /include are found.
+include_directories(${PROJECT_SOURCE_DIR}/include)
+
+# Collect all source files.
+file(GLOB SOURCES "${PROJECT_SOURCE_DIR}/src/*.cpp")
+
+# Create the executable.
+add_executable(ekf_localisation ${SOURCES})
+
+# Link SFML libraries using the imported targets.
+target_link_libraries(ekf_localisation 
+    SFML::System 
+    SFML::Window 
+    SFML::Graphics 
+    SFML::Network 
+    SFML::Audio
+)
