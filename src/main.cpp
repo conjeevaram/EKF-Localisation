@@ -1,7 +1,9 @@
 #include <SFML/Graphics.hpp>
+#include <iostream>
 #include "map.h"
 #include "trajectory.h"
 #include "sensorsim.h"
+#include <sstream>  // for string formatting
 
 int main() {
     // ---------------------------
@@ -31,6 +33,23 @@ int main() {
     // ---------------------------
     sf::RenderWindow window(sf::VideoMode(sf::Vector2u{WINDOW_WIDTH, WINDOW_HEIGHT}, BITS_PER_PIXEL), WINDOW_TITLE);
     window.setFramerateLimit(60);
+
+    // ---------------------------
+    // font and text setup for acceleration display
+    // ---------------------------
+    sf::Font font;
+    if (!font.openFromFile("/Users/paras/Projects/EKF-Localisation/assets/cmunrm.ttf")) {
+        std::cerr << "Failed to load font\n";
+    }
+    
+    // Initialize sf::Text with the font reference
+    sf::Text accelText(font);
+    
+    // Set additional properties
+    accelText.setString("Acceleration: ");
+    accelText.setCharacterSize(14);
+    accelText.setFillColor(sf::Color::White);
+    accelText.setPosition(sf::Vector2f(10.f, 10.f));  // Position in top-left corner
 
     // ---------------------------
     // simulation initialization
@@ -142,6 +161,13 @@ int main() {
                     }
                 }
 
+                // get acceleration for display
+                auto accel = sensor.getAcceleration();
+                std::stringstream ss;
+                ss << "Acceleration: (" << std::fixed << std::setprecision(2) 
+                   << accel.first << ", " << accel.second << ")";
+                accelText.setString(ss.str());
+
                 // draw everything
                 window.clear(sf::Color::Black);
                 for (const auto& shape : landmarkShapes) window.draw(shape);
@@ -149,10 +175,18 @@ int main() {
                 window.draw(sensorTrail);
                 window.draw(gtCircle);
                 window.draw(sensorCircle);
+                window.draw(accelText);
                 window.display();
             }
             return 0;
         }
+
+        // Get acceleration for display
+        auto accel = sensor.getAcceleration();
+        std::stringstream ss;
+        ss << "Acceleration: (" << std::fixed << std::setprecision(2) 
+           << accel.first << ", " << accel.second << ")";
+        accelText.setString(ss.str());
 
         // render frame
         window.clear(sf::Color::Black);
@@ -176,6 +210,7 @@ int main() {
         sensorCircle.setPosition(currentSensorPos);
         window.draw(gtCircle);
         window.draw(sensorCircle);
+        window.draw(accelText);
 
         window.display();
     }
