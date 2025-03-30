@@ -14,9 +14,9 @@ int main() {
     const unsigned int BITS_PER_PIXEL = 32;
     const std::string WINDOW_TITLE    = "Map & Sensor Visualization";
 
-    const float TARGET_HZ           = 500.0f;       // samples per second
+    const float TARGET_HZ           = 1000.0f;       // samples per second
     const float SIMULATION_DURATION = 10.0f;        // duration of trajectory in seconds
-    const float PCL_DENSITY         = 2.0f;         // increase to output a denser point cloud
+    const float PCL_DENSITY         = 1.0f;         // increase to output a denser point cloud
 
     const size_t NUM_POINTS     = static_cast<size_t>(TARGET_HZ * SIMULATION_DURATION * PCL_DENSITY);
     const float TIME_STEP       = 1.0f / TARGET_HZ;
@@ -34,20 +34,16 @@ int main() {
     sf::RenderWindow window(sf::VideoMode(sf::Vector2u{WINDOW_WIDTH, WINDOW_HEIGHT}, BITS_PER_PIXEL), WINDOW_TITLE);
     window.setFramerateLimit(60);
 
-    // ---------------------------
-    // font and text setup for acceleration display
-    // ---------------------------
+    // Setup for text rendering (acceleration display)
     sf::Font font;
     if (!font.openFromFile("/Users/paras/Projects/EKF-Localisation/assets/cmunrm.ttf")) {
         std::cerr << "Failed to load font\n";
     }
     
-    // Initialize sf::Text with the font reference
     sf::Text accelText(font);
     
-    // Set additional properties
     accelText.setString("Acceleration: ");
-    accelText.setCharacterSize(14);
+    accelText.setCharacterSize(24);
     accelText.setFillColor(sf::Color::White);
     accelText.setPosition(sf::Vector2f(10.f, 10.f));  // Position in top-left corner
 
@@ -55,23 +51,34 @@ int main() {
     // simulation initialization
     // ---------------------------
     Map map;
-    Trajectory trajectory;
+    
+    // Create trajectory with desired type (CIRCLE is default)
+    Trajectory trajectory(Trajectory::CIRCLE);  // or Trajectory::SQUARE
+    
+    // To switch trajectory type:
+    // trajectory.setTrajectoryType(Trajectory::SQUARE);
+    
     SensorSim sensor = createSensorSim();
     auto trajectory_points = trajectory.getContinuousPoints(NUM_POINTS);
 
     // ---------------------------
     // landmark visualization setup
     // ---------------------------
-    std::vector<sf::CircleShape> landmarkShapes;
+    std::vector<sf::ConvexShape> landmarkShapes;
     for (const auto& [id, pos] : map.getLandmarks()) {
-        sf::CircleShape circle(3.0f);
-        circle.setFillColor(sf::Color::Red);
-        circle.setOrigin(sf::Vector2f(3.0f, 3.0f));
-        circle.setPosition(sf::Vector2f(
-            (pos.first - simCenterX) * SCALE + centerX,   // shift X to center
-            centerY - ((pos.second - simCenterY) * SCALE) // shift Y (invert vertical)
+        sf::ConvexShape triangle;
+        triangle.setPointCount(3);
+        float size = 3.0f;
+        // Define an equilateral triangle pointing upward
+        triangle.setPoint(0, sf::Vector2f(0.f, -size));
+        triangle.setPoint(1, sf::Vector2f(-size, size));
+        triangle.setPoint(2, sf::Vector2f(size, size));
+        triangle.setFillColor(sf::Color::Blue);
+        triangle.setPosition(sf::Vector2f(
+            (pos.first - simCenterX) * SCALE + centerX,
+            centerY - ((pos.second - simCenterY) * SCALE)
         ));
-        landmarkShapes.push_back(circle);
+        landmarkShapes.push_back(triangle);
     }
 
     // ---------------------------
