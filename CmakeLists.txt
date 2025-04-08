@@ -1,31 +1,86 @@
-cmake_minimum_required(VERSION 3.10)
+# cmake_minimum_required(VERSION 3.10)
 
+# project(EKF-Localisation)
+
+# # set the C++ standard.
+# set(CMAKE_CXX_STANDARD 17)
+# set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# set(CMAKE_PREFIX_PATH "/opt/homebrew/Cellar/sfml/3.0.0_1")
+
+# # find packages
+# find_package(SFML 3 COMPONENTS System Window Graphics Network Audio REQUIRED)
+
+# # Add the include directory so that headers in /include are found.
+# include_directories(${PROJECT_SOURCE_DIR}/include)
+
+# # Collect all source files.
+# file(GLOB SOURCES "${PROJECT_SOURCE_DIR}/src/*.cpp")
+
+# # Create the executable.
+# add_executable(ekf_localisation ${SOURCES})
+
+# # Link SFML libraries using the imported targets.
+# target_link_libraries(ekf_localisation 
+#     SFML::System 
+#     SFML::Window 
+#     SFML::Graphics 
+#     SFML::Network 
+#     SFML::Audio
+# )
+
+cmake_minimum_required(VERSION 3.10)
 project(EKF-Localisation)
 
-# set the C++ standard.
+# =====================
+# Compiler Settings
+# =====================
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Point CMake to SFML's install location.
-set(CMAKE_PREFIX_PATH "/opt/homebrew/Cellar/sfml/3.0.0_1")
+# =====================
+# Dependency Configuration
+# =====================
+# Eigen (Homebrew-specific paths)
+list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/eigen")
+find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 
-# Find SFML package using SFML 3 with proper component names.
-find_package(SFML 3 COMPONENTS System Window Graphics Network Audio REQUIRED)
+# SFML
+find_package(SFML 3 COMPONENTS System Window Graphics REQUIRED)
 
-# Add the include directory so that headers in /include are found.
-include_directories(${PROJECT_SOURCE_DIR}/include)
-
-# Collect all source files.
-file(GLOB SOURCES "${PROJECT_SOURCE_DIR}/src/*.cpp")
-
-# Create the executable.
+# =====================
+# Project Configuration
+# =====================
+file(GLOB SOURCES "src/*.cpp")
 add_executable(ekf_localisation ${SOURCES})
 
-# Link SFML libraries using the imported targets.
-target_link_libraries(ekf_localisation 
-    SFML::System 
-    SFML::Window 
-    SFML::Graphics 
-    SFML::Network 
-    SFML::Audio
+# =====================
+# Include Directories
+# =====================
+target_include_directories(ekf_localisation PRIVATE
+    ${PROJECT_SOURCE_DIR}/include
+    /opt/homebrew/opt/eigen/include/eigen3 
+    ${EIGEN3_INCLUDE_DIRS}                  
 )
+
+# =====================
+# Link Libraries
+# =====================
+target_link_libraries(ekf_localisation PRIVATE
+    SFML::System
+    SFML::Window
+    SFML::Graphics
+    Eigen3::Eigen
+)
+
+# =====================
+# IDE Support
+# =====================
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(ekf_localisation PRIVATE
+        -Wall
+        -Wextra
+        -Wpedantic
+    )
+endif()

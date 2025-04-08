@@ -1,75 +1,67 @@
 #include <SFML/Graphics.hpp>
 #include <iostream>
+#include <sstream>
+#include <random>
 #include "map.h"
 #include "trajectory.h"
 #include "sensorsim.h"
-#include <sstream>  // for string formatting
+#include "ekf.h"
 
 int main() {
     // ---------------------------
-    // simulation & visualization parameters
+    // Simulation parameters
     // ---------------------------
-    const unsigned int WINDOW_WIDTH   = 800; // updated for larger viewing area
-    const unsigned int WINDOW_HEIGHT  = 800; // updated for larger viewing area
-    const unsigned int BITS_PER_PIXEL = 32;
-    const std::string WINDOW_TITLE    = "Map & Sensor Visualization";
-
-    const float TARGET_HZ           = 1000.0f;       // samples per second
-    const float SIMULATION_DURATION = 10.0f;        // duration of trajectory in seconds
-    const float PCL_DENSITY         = 1.0f;         // increase to output a denser point cloud
-
-    const size_t NUM_POINTS     = static_cast<size_t>(TARGET_HZ * SIMULATION_DURATION * PCL_DENSITY);
-    const float TIME_STEP       = 1.0f / TARGET_HZ;
-    const float SIMULATION_SPEED = NUM_POINTS / SIMULATION_DURATION; // points per second
-
-    const float SCALE   = 5.0f;                       // scale factor for visualization
-    const float centerX = WINDOW_WIDTH / 2.0f;        // new center X coordinate
-    const float centerY = WINDOW_HEIGHT / 2.0f;       // new center Y coordinate
-    const float simCenterX = 60.0f;                   // simulation center X
-    const float simCenterY = 60.0f;                   // simulation center Y
+    const unsigned int WINDOW_WIDTH = 800;
+    const unsigned int WINDOW_HEIGHT = 800;
+    const std::string WINDOW_TITLE = "EKF Localization";
+    const float TARGET_HZ = 2000.0f;
+    const float SIMULATION_DURATION = 10.0f;
+    const float PCL_DENSITY = 1.0f;
+    const size_t NUM_POINTS = static_cast<size_t>(TARGET_HZ * SIMULATION_DURATION * PCL_DENSITY);
+    const float TIME_STEP = 1.0f / TARGET_HZ;
+    const float SIMULATION_SPEED = NUM_POINTS / SIMULATION_DURATION;
+    const float SCALE = 5.0f;
+    const float centerX = WINDOW_WIDTH / 2.0f;
+    const float centerY = WINDOW_HEIGHT / 2.0f;
+    const float simCenterX = 60.0f;
+    const float simCenterY = 60.0f;
+    const float LANDMARK_DETECTION_RANGE = 20.0f;  // Increased from 10
 
     // ---------------------------
-    // window setup
+    // Window setup
     // ---------------------------
-    sf::RenderWindow window(sf::VideoMode(sf::Vector2u{WINDOW_WIDTH, WINDOW_HEIGHT}, BITS_PER_PIXEL), WINDOW_TITLE);
+    sf::RenderWindow window(sf::VideoMode(sf::Vector2u(WINDOW_WIDTH, WINDOW_HEIGHT)), WINDOW_TITLE);
     window.setFramerateLimit(60);
 
-    // Setup for text rendering (acceleration display)
+    // Font setup
     sf::Font font;
-    if (!font.openFromFile("/Users/paras/Projects/EKF-Localisation/assets/cmunrm.ttf")) {
+    if (!font.openFromFile("assets/cmunrm.ttf")) {
         std::cerr << "Failed to load font\n";
     }
-    
-    sf::Text accelText(font);
-    
-    accelText.setString("Acceleration: ");
-    accelText.setCharacterSize(24);
-    accelText.setFillColor(sf::Color::White);
-    accelText.setPosition(sf::Vector2f(10.f, 10.f));  // Position in top-left corner
+
+    // Text setup
+    sf::Text infoText(font);
+    infoText.setCharacterSize(20);
+    infoText.setFillColor(sf::Color::White);
+    infoText.setPosition(sf::Vector2f(10.f, 10.f));
 
     // ---------------------------
-    // simulation initialization
+    // Simulation initialization
     // ---------------------------
     Map map;
-    
-    // Create trajectory with desired type (CIRCLE is default)
-    Trajectory trajectory(Trajectory::CIRCLE);  // or Trajectory::SQUARE
-    
-    // To switch trajectory type:
-    // trajectory.setTrajectoryType(Trajectory::SQUARE);
-    
+    Trajectory trajectory(Trajectory::CIRCLE);
     SensorSim sensor = createSensorSim();
     auto trajectory_points = trajectory.getContinuousPoints(NUM_POINTS);
+    float initial_x = trajectory_points[0].first;
+    float initial_y = trajectory_points[0].second;
+    EKF ekf(map, initial_x, initial_y);
 
-    // ---------------------------
-    // landmark visualization setup
-    // ---------------------------
+    // Landmark visualization
     std::vector<sf::ConvexShape> landmarkShapes;
     for (const auto& [id, pos] : map.getLandmarks()) {
         sf::ConvexShape triangle;
         triangle.setPointCount(3);
-        float size = 3.0f;
-        // Define an equilateral triangle pointing upward
+        const float size = 3.0f;
         triangle.setPoint(0, sf::Vector2f(0.f, -size));
         triangle.setPoint(1, sf::Vector2f(-size, size));
         triangle.setPoint(2, sf::Vector2f(size, size));
@@ -81,10 +73,13 @@ int main() {
         landmarkShapes.push_back(triangle);
     }
 
-    // ---------------------------
-    // ground truth trajectory setup
-    // ---------------------------
-    sf::VertexArray groundTruthLine(sf::PrimitiveType::LineStrip, trajectory_points.size());
+    // Trajectory visualization
+    sf::VertexArray groundTruthLine(sf::PrimitiveType::LineStrip);
+    sf::VertexArray sensorTrail(sf::PrimitiveType::Points);
+    sf::VertexArray ekfTrail(sf::PrimitiveType::Points);
+    groundTruthLine.resize(trajectory_points.size());
+
+    // Initialize ground truth trajectory
     for (size_t i = 0; i < trajectory_points.size(); ++i) {
         groundTruthLine[i].position = sf::Vector2f(
             (trajectory_points[i].first - simCenterX) * SCALE + centerX,
@@ -94,130 +89,115 @@ int main() {
     }
 
     // ---------------------------
-    // sensor data storage setup
+    // Main simulation loop
     // ---------------------------
-    sf::VertexArray sensorTrail(sf::PrimitiveType::Points);
     float accumulatedTime = 0.0f;
     float simIndex = 0.0f;
-    sf::Vector2f currentSensorPos;
-    sf::Vector2f currentGtPos;
-
-    // ---------------------------
-    // main simulation loop
-    // ---------------------------
     sf::Clock clock;
+    sf::Vector2f currentSensorPos;
+
     while (window.isOpen()) {
-        // poll events using the provided event loop style
+        // Event handling
         while (auto event = window.pollEvent()) {
             if (event->is<sf::Event::Closed>()) {
                 window.close();
             }
         }
 
-        // fixed-step simulation updates
+        // Simulation update
         accumulatedTime += clock.restart().asSeconds();
         while (accumulatedTime >= TIME_STEP && simIndex < trajectory_points.size() - 1) {
-            // update simulation index
             simIndex += SIMULATION_SPEED * TIME_STEP;
             simIndex = std::min(simIndex, static_cast<float>(trajectory_points.size() - 1));
 
-            // calculate ground truth position
-            int idx = static_cast<int>(simIndex);
-            int nextIdx = (idx + 1 < trajectory_points.size()) ? idx + 1 : idx;
-            float t = simIndex - idx;
-            float gt_x = trajectory_points[idx].first * (1.0f - t) + trajectory_points[nextIdx].first * t;
-            float gt_y = trajectory_points[idx].second * (1.0f - t) + trajectory_points[nextIdx].second * t;
+            // Get ground truth position
+            const int idx = static_cast<int>(simIndex);
+            const auto nextIdx = (static_cast<size_t>(idx) + 1 < trajectory_points.size()) ? idx + 1 : idx;
+            const float t = simIndex - idx;
+            const float gt_x = trajectory_points[idx].first * (1.0f - t) + trajectory_points[nextIdx].first * t;
+            const float gt_y = trajectory_points[idx].second * (1.0f - t) + trajectory_points[nextIdx].second * t;
 
-            // get sensor reading
-            std::pair<float, float> sensorReading = sensor.update({gt_x, gt_y}, TIME_STEP);
+            // Sensor update
+            const auto sensorReading = sensor.update({gt_x, gt_y}, TIME_STEP);
             
-            // update positions using centered coordinate system
-            currentGtPos = sf::Vector2f(
-                (gt_x - simCenterX) * SCALE + centerX,
-                centerY - ((gt_y - simCenterY) * SCALE)
-            );
+            // EKF update
+            ekf.predict(TIME_STEP);
+            ekf.updateSensor(Eigen::Vector2f(sensorReading.first, sensorReading.second));
+
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::normal_distribution<float> landmark_noise(0.0f, 0.1f);
+            
+            // Inside the simulation loop:
+            for (const auto& [id, pos] : map.getLandmarks()) {
+                Eigen::VectorXf state = ekf.getState();
+                float est_x = state[0] + state[4];
+                float est_y = state[1] + state[5];
+                float dx = pos.first - est_x;
+                float dy = pos.second - est_y;
+                if (std::hypot(dx, dy) < LANDMARK_DETECTION_RANGE) {
+                    float true_z_x = pos.first - gt_x;
+                    float true_z_y = pos.second - gt_y;
+                    float z_x = true_z_x + landmark_noise(gen);
+                    float z_y = true_z_y + landmark_noise(gen);
+                    ekf.updateLandmark(Eigen::Vector2f(z_x, z_y), pos.first, pos.second);
+                }
+            }
+
+            // Update sensor trail
             currentSensorPos = sf::Vector2f(
                 (sensorReading.first - simCenterX) * SCALE + centerX,
                 centerY - ((sensorReading.second - simCenterY) * SCALE)
             );
+            sf::Vertex sensorPoint;
+            sensorPoint.position = currentSensorPos;
+            sensorPoint.color = sf::Color::Red;
+            sensorTrail.append(sensorPoint);
 
-            // add to point cloud
-            sf::Vertex vertex;
-            vertex.position = currentSensorPos;
-            vertex.color = sf::Color::Red;
-            sensorTrail.append(vertex);
+            // Update EKF trail
+            const Eigen::VectorXf state = ekf.getState();
+            sf::Vertex ekfPoint;
+            ekfPoint.position = sf::Vector2f(
+                (state[0] - simCenterX) * SCALE + centerX,
+                centerY - ((state[1] - simCenterY) * SCALE)
+            );
+            ekfPoint.color = sf::Color::Yellow;
+            ekfTrail.append(ekfPoint);
 
             accumulatedTime -= TIME_STEP;
         }
 
-        // check for trajectory completion
-        if (simIndex >= trajectory_points.size() - 1) {
-            // freeze final frame
-            sf::CircleShape gtCircle(4.f), sensorCircle(4.f);
-            gtCircle.setFillColor(sf::Color::Green);
-            sensorCircle.setFillColor(sf::Color::Red);
-            gtCircle.setOrigin(sf::Vector2f(4.f, 4.f));
-            sensorCircle.setOrigin(sf::Vector2f(4.f, 4.f));
-            gtCircle.setPosition(currentGtPos);
-            sensorCircle.setPosition(currentSensorPos);
-
-            while (window.isOpen()) {
-                while (auto event = window.pollEvent()) {
-                    if (event->is<sf::Event::Closed>()) {
-                        window.close();
-                    }
-                }
-
-                // get acceleration for display
-                auto accel = sensor.getAcceleration();
-                std::stringstream ss;
-                ss << "Acceleration: (" << std::fixed << std::setprecision(2) 
-                   << accel.first << ", " << accel.second << ")";
-                accelText.setString(ss.str());
-
-                // draw everything
-                window.clear(sf::Color::Black);
-                for (const auto& shape : landmarkShapes) window.draw(shape);
-                window.draw(groundTruthLine);
-                window.draw(sensorTrail);
-                window.draw(gtCircle);
-                window.draw(sensorCircle);
-                window.draw(accelText);
-                window.display();
-            }
-            return 0;
-        }
-
-        // Get acceleration for display
-        auto accel = sensor.getAcceleration();
-        std::stringstream ss;
-        ss << "Acceleration: (" << std::fixed << std::setprecision(2) 
-           << accel.first << ", " << accel.second << ")";
-        accelText.setString(ss.str());
-
-        // render frame
+        // ---------------------------
+        // Rendering
+        // ---------------------------
         window.clear(sf::Color::Black);
-        
-        // draw landmarks
+
+        // Draw landmarks
         for (const auto& shape : landmarkShapes) {
             window.draw(shape);
         }
 
-        // draw trajectories
+        // Draw trajectories
         window.draw(groundTruthLine);
         window.draw(sensorTrail);
+        window.draw(ekfTrail);
 
-        // draw current positions
-        sf::CircleShape gtCircle(4.f), sensorCircle(4.f);
-        gtCircle.setFillColor(sf::Color::Green);
+        // Draw current sensor position
+        sf::CircleShape sensorCircle(4.f);
         sensorCircle.setFillColor(sf::Color::Red);
-        gtCircle.setOrigin(sf::Vector2f(4.f, 4.f));
         sensorCircle.setOrigin(sf::Vector2f(4.f, 4.f));
-        gtCircle.setPosition(currentGtPos);
         sensorCircle.setPosition(currentSensorPos);
-        window.draw(gtCircle);
         window.draw(sensorCircle);
-        window.draw(accelText);
+
+        // Draw info text
+        std::stringstream ss;
+        ss << "Trajectories:\n"
+           << "Green - Ground Truth\n"
+           << "Red - Noisy Sensor\n"
+           << "Yellow - EKF Estimate\n"
+           << "Landmark Detection Range: " << LANDMARK_DETECTION_RANGE << " units";
+        infoText.setString(ss.str());
+        window.draw(infoText);
 
         window.display();
     }
