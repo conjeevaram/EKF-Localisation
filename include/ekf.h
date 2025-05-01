@@ -17,7 +17,7 @@ public:
     Eigen::MatrixXf getCovariance() const { return P; }
 
 private:
-    Eigen::VectorXf state; // [x, y, vx, vy, dx, dy]
+    Eigen::VectorXf state; // [x, y, vx, vy]
     Eigen::MatrixXf P;     // Covariance matrix
     Eigen::MatrixXf Q;     // Process noise covariance
     Eigen::Matrix2f R_sensor, R_landmark;

@@ -73,6 +73,21 @@ int main() {
         landmarkShapes.push_back(triangle);
     }
 
+    // Create detection range circle
+    sf::CircleShape detectionRangeCircle;
+    detectionRangeCircle.setRadius(LANDMARK_DETECTION_RANGE * SCALE);
+    detectionRangeCircle.setOrigin(sf::Vector2f(
+        LANDMARK_DETECTION_RANGE * SCALE,
+        LANDMARK_DETECTION_RANGE * SCALE
+    ));
+    detectionRangeCircle.setFillColor(sf::Color::Transparent);
+    detectionRangeCircle.setOutlineColor(sf::Color(100, 100, 255, 100)); // Light blue, semi-transparent
+    detectionRangeCircle.setOutlineThickness(1.0f);
+
+    // Landmark detection visualization
+    std::vector<sf::Vertex> detectedLandmarkLines;
+    std::vector<size_t> activeDetectionIndices;
+
     // Trajectory visualization
     sf::VertexArray groundTruthLine(sf::PrimitiveType::LineStrip);
     sf::VertexArray sensorTrail(sf::PrimitiveType::Points);
@@ -94,7 +109,15 @@ int main() {
     float accumulatedTime = 0.0f;
     float simIndex = 0.0f;
     sf::Clock clock;
-    sf::Vector2f currentSensorPos;
+
+    sf::Vector2f currentSensorPos(
+        (initial_x - simCenterX) * SCALE + centerX,
+        centerY - ((initial_y - simCenterY) * SCALE)
+    );
+    sf::Vector2f currentEkfPos(
+        (initial_x - simCenterX) * SCALE + centerX,
+        centerY - ((initial_y - simCenterY) * SCALE)
+    );
 
     while (window.isOpen()) {
         // Event handling
@@ -128,11 +151,15 @@ int main() {
             std::mt19937 gen(rd());
             std::normal_distribution<float> landmark_noise(0.0f, 0.1f);
             
+            // Clear previous detection visualization
+            detectedLandmarkLines.clear();
+            activeDetectionIndices.clear();
+            
             // Inside the simulation loop:
             for (const auto& [id, pos] : map.getLandmarks()) {
                 Eigen::VectorXf state = ekf.getState();
-                float est_x = state[0] + state[4];
-                float est_y = state[1] + state[5];
+                float est_x = state[0];
+                float est_y = state[1];
                 float dx = pos.first - est_x;
                 float dy = pos.second - est_y;
                 if (std::hypot(dx, dy) < LANDMARK_DETECTION_RANGE) {
@@ -141,6 +168,33 @@ int main() {
                     float z_x = true_z_x + landmark_noise(gen);
                     float z_y = true_z_y + landmark_noise(gen);
                     ekf.updateLandmark(Eigen::Vector2f(z_x, z_y), pos.first, pos.second);
+                    
+                    // Add to visualization of detected landmarks
+                    sf::Vector2f ekfPosScreen(
+                        (est_x - simCenterX) * SCALE + centerX,
+                        centerY - ((est_y - simCenterY) * SCALE)
+                    );
+                    sf::Vector2f landmarkPosScreen(
+                        (pos.first - simCenterX) * SCALE + centerX,
+                        centerY - ((pos.second - simCenterY) * SCALE)
+                    );
+                    
+                    sf::Vertex v0;
+                    v0.position = ekfPosScreen;
+                    v0.color    = sf::Color(255, 255,   0, 128);
+                    sf::Vertex v1;
+                    v1.position = landmarkPosScreen;
+                    v1.color    = sf::Color(  0, 255, 255, 128);
+                    detectedLandmarkLines.push_back(v0);
+                    detectedLandmarkLines.push_back(v1);
+                    
+                    // Record which landmarks are active
+                    for (size_t i = 0; i < landmarkShapes.size(); i++) {
+                        if (landmarkShapes[i].getPosition() == landmarkPosScreen) {
+                            activeDetectionIndices.push_back(i);
+                            break;
+                        }
+                    }
                 }
             }
 
@@ -161,6 +215,7 @@ int main() {
                 (state[0] - simCenterX) * SCALE + centerX,
                 centerY - ((state[1] - simCenterY) * SCALE)
             );
+            currentEkfPos = ekfPoint.position;
             ekfPoint.color = sf::Color::Yellow;
             ekfTrail.append(ekfPoint);
 
@@ -172,15 +227,35 @@ int main() {
         // ---------------------------
         window.clear(sf::Color::Black);
 
+        // Draw detection range around EKF position
+        detectionRangeCircle.setPosition(currentEkfPos);
+        window.draw(detectionRangeCircle);
+
         // Draw landmarks
-        for (const auto& shape : landmarkShapes) {
-            window.draw(shape);
+        for (size_t i = 0; i < landmarkShapes.size(); i++) {
+            // Temporarily change color of active landmarks
+            bool isActive = std::find(activeDetectionIndices.begin(), activeDetectionIndices.end(), i) != activeDetectionIndices.end();
+            if (isActive) {
+                landmarkShapes[i].setFillColor(sf::Color::Cyan);
+            } else {
+                landmarkShapes[i].setFillColor(sf::Color::Blue);
+            }
+            window.draw(landmarkShapes[i]);
         }
 
         // Draw trajectories
         window.draw(groundTruthLine);
         window.draw(sensorTrail);
         window.draw(ekfTrail);
+        
+        // Draw lines to detected landmarks
+        if (!detectedLandmarkLines.empty()) {
+            window.draw(
+                detectedLandmarkLines.data(),
+                detectedLandmarkLines.size(),
+                sf::PrimitiveType::Lines
+            );
+        }
 
         // Draw current sensor position
         sf::CircleShape sensorCircle(4.f);
@@ -189,13 +264,22 @@ int main() {
         sensorCircle.setPosition(currentSensorPos);
         window.draw(sensorCircle);
 
+        // Draw current EKF position
+        sf::CircleShape ekfCircle(4.f);
+        ekfCircle.setFillColor(sf::Color::Yellow);
+        ekfCircle.setOrigin(sf::Vector2f(4.f, 4.f));
+        ekfCircle.setPosition(currentEkfPos);
+        window.draw(ekfCircle);
+
         // Draw info text
         std::stringstream ss;
         ss << "Trajectories:\n"
            << "Green - Ground Truth\n"
            << "Red - Noisy Sensor\n"
            << "Yellow - EKF Estimate\n"
-           << "Landmark Detection Range: " << LANDMARK_DETECTION_RANGE << " units";
+           << "Blue - Landmarks\n"
+           << "Cyan - Detected Landmarks\n"
+           << "Blue Circle - Landmark Detection Range: " << LANDMARK_DETECTION_RANGE << " units";
         infoText.setString(ss.str());
         window.draw(infoText);
 
