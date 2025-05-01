@@ -2,12 +2,11 @@
 #define EKF_H
 
 #include <Eigen/Dense>
-#include "map.h"
 #include <random>
 
 class EKF {
 public:
-    EKF(const Map& map, float initial_x, float initial_y);
+    EKF(float initial_x, float initial_y);
 
     void predict(float dt);
     void updateSensor(const Eigen::Vector2f& z);
@@ -21,7 +20,6 @@ private:
     Eigen::MatrixXf P;     // Covariance matrix
     Eigen::MatrixXf Q;     // Process noise covariance
     Eigen::Matrix2f R_sensor, R_landmark;
-    const Map& map;
     std::default_random_engine gen;
     std::normal_distribution<float> landmarkNoise;
 

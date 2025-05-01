@@ -2,11 +2,11 @@
 #include <iostream>
 #include <random>
 
-EKF::EKF(const Map& map, float initial_x, float initial_y) : 
+// ctor: init state vector, covariance, process noise, and sensor/landmark noise
+EKF::EKF(float initial_x, float initial_y) : 
     state(4),
     P(4, 4),
     Q(4, 4),
-    map(map),
     landmarkNoise(0.0f, 0.1f) {
     state << initial_x, initial_y, 0.0f, 0.0f;
     P.setIdentity();
@@ -21,10 +21,12 @@ EKF::EKF(const Map& map, float initial_x, float initial_y) :
                   0.0f, 0.01f;
 }
 
+// initialize default position and velocity
 void EKF::initializeState() {
     state << 60.0f, 60.0f, 0.0f, 0.0f;
 }
 
+// propagate state with constant velocity model and update covariance
 void EKF::predict(float dt) {
     Eigen::MatrixXf F = Eigen::MatrixXf::Identity(4, 4);
     F(0, 2) = dt;
@@ -33,6 +35,7 @@ void EKF::predict(float dt) {
     P = F * P * F.transpose() + Q;
 }
 
+// update state and covariance with sensor measurement
 void EKF::updateSensor(const Eigen::Vector2f& z) {
     Eigen::MatrixXf H(2, 4);
     H << 1,0,0,0,
@@ -46,6 +49,7 @@ void EKF::updateSensor(const Eigen::Vector2f& z) {
     P = (Eigen::MatrixXf::Identity(4,4) - K * H) * P;
 }
 
+// update state and covariance with landmark observation
 void EKF::updateLandmark(const Eigen::Vector2f& z, float lx, float ly) {
     Eigen::MatrixXf H(2, 4);
     H << -1,0,0,0,

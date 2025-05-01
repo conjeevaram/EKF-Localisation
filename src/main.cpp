@@ -25,7 +25,7 @@ int main() {
     const float centerY = WINDOW_HEIGHT / 2.0f;
     const float simCenterX = 60.0f;
     const float simCenterY = 60.0f;
-    const float LANDMARK_DETECTION_RANGE = 20.0f;  // Increased from 10
+    const float LANDMARK_DETECTION_RANGE = 20.0f;
 
     // ---------------------------
     // Window setup
@@ -33,13 +33,12 @@ int main() {
     sf::RenderWindow window(sf::VideoMode(sf::Vector2u(WINDOW_WIDTH, WINDOW_HEIGHT)), WINDOW_TITLE);
     window.setFramerateLimit(60);
 
-    // Font setup
+    // Setup
     sf::Font font;
     if (!font.openFromFile("assets/cmunrm.ttf")) {
         std::cerr << "Failed to load font\n";
     }
 
-    // Text setup
     sf::Text infoText(font);
     infoText.setCharacterSize(20);
     infoText.setFillColor(sf::Color::White);
@@ -54,7 +53,7 @@ int main() {
     auto trajectory_points = trajectory.getContinuousPoints(NUM_POINTS);
     float initial_x = trajectory_points[0].first;
     float initial_y = trajectory_points[0].second;
-    EKF ekf(map, initial_x, initial_y);
+    EKF ekf(initial_x, initial_y);
 
     // Landmark visualization
     std::vector<sf::ConvexShape> landmarkShapes;
@@ -81,7 +80,7 @@ int main() {
         LANDMARK_DETECTION_RANGE * SCALE
     ));
     detectionRangeCircle.setFillColor(sf::Color::Transparent);
-    detectionRangeCircle.setOutlineColor(sf::Color(100, 100, 255, 100)); // Light blue, semi-transparent
+    detectionRangeCircle.setOutlineColor(sf::Color(100, 100, 255, 100));
     detectionRangeCircle.setOutlineThickness(1.0f);
 
     // Landmark detection visualization
@@ -151,7 +150,7 @@ int main() {
             std::mt19937 gen(rd());
             std::normal_distribution<float> landmark_noise(0.0f, 0.1f);
             
-            // Clear previous detection visualization
+            // Clear previous detection visualization (sfml)
             detectedLandmarkLines.clear();
             activeDetectionIndices.clear();
             
@@ -188,7 +187,7 @@ int main() {
                     detectedLandmarkLines.push_back(v0);
                     detectedLandmarkLines.push_back(v1);
                     
-                    // Record which landmarks are active
+                    // record which landmarks are active
                     for (size_t i = 0; i < landmarkShapes.size(); i++) {
                         if (landmarkShapes[i].getPosition() == landmarkPosScreen) {
                             activeDetectionIndices.push_back(i);
@@ -233,7 +232,7 @@ int main() {
 
         // Draw landmarks
         for (size_t i = 0; i < landmarkShapes.size(); i++) {
-            // Temporarily change color of active landmarks
+            // change color of active landmarks
             bool isActive = std::find(activeDetectionIndices.begin(), activeDetectionIndices.end(), i) != activeDetectionIndices.end();
             if (isActive) {
                 landmarkShapes[i].setFillColor(sf::Color::Cyan);
@@ -248,7 +247,7 @@ int main() {
         window.draw(sensorTrail);
         window.draw(ekfTrail);
         
-        // Draw lines to detected landmarks
+        // Draw lines to landmarks within detection radius
         if (!detectedLandmarkLines.empty()) {
             window.draw(
                 detectedLandmarkLines.data(),
