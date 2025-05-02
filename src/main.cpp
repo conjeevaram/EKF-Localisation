@@ -2,6 +2,7 @@
 #include <iostream>
 #include <sstream>
 #include <random>
+#include <iomanip>
 #include "map.h"
 #include "trajectory.h"
 #include "sensorsim.h"
@@ -60,7 +61,7 @@ int main() {
     for (const auto& [id, pos] : map.getLandmarks()) {
         sf::ConvexShape triangle;
         triangle.setPointCount(3);
-        const float size = 3.0f;
+        const float size = 6.0f;
         triangle.setPoint(0, sf::Vector2f(0.f, -size));
         triangle.setPoint(1, sf::Vector2f(-size, size));
         triangle.setPoint(2, sf::Vector2f(size, size));
@@ -81,7 +82,7 @@ int main() {
     ));
     detectionRangeCircle.setFillColor(sf::Color::Transparent);
     detectionRangeCircle.setOutlineColor(sf::Color(100, 100, 255, 100));
-    detectionRangeCircle.setOutlineThickness(1.0f);
+    detectionRangeCircle.setOutlineThickness(3.0f);
 
     // Landmark detection visualization
     std::vector<sf::Vertex> detectedLandmarkLines;
@@ -117,6 +118,9 @@ int main() {
         (initial_x - simCenterX) * SCALE + centerX,
         centerY - ((initial_y - simCenterY) * SCALE)
     );
+
+    double sumError = 0.0;
+    size_t errorCount = 0;
 
     while (window.isOpen()) {
         // Event handling
@@ -218,6 +222,11 @@ int main() {
             ekfPoint.color = sf::Color::Yellow;
             ekfTrail.append(ekfPoint);
 
+            float errx = state[0] - gt_x;
+            float erry = state[1] - gt_y;
+            sumError += std::sqrt(errx*errx + erry*erry);
+            ++errorCount;
+
             accumulatedTime -= TIME_STEP;
         }
 
@@ -258,15 +267,19 @@ int main() {
 
         // Draw current sensor position
         sf::CircleShape sensorCircle(4.f);
+        sensorCircle.setOutlineThickness(2.f);
+        sensorCircle.setOutlineColor(sf::Color::Red);
         sensorCircle.setFillColor(sf::Color::Red);
         sensorCircle.setOrigin(sf::Vector2f(4.f, 4.f));
         sensorCircle.setPosition(currentSensorPos);
         window.draw(sensorCircle);
 
         // Draw current EKF position
-        sf::CircleShape ekfCircle(4.f);
+        sf::CircleShape ekfCircle(8.f);
+        ekfCircle.setOutlineThickness(2.f);
+        ekfCircle.setOutlineColor(sf::Color::Yellow);
         ekfCircle.setFillColor(sf::Color::Yellow);
-        ekfCircle.setOrigin(sf::Vector2f(4.f, 4.f));
+        ekfCircle.setOrigin(sf::Vector2f(8.f, 8.f));
         ekfCircle.setPosition(currentEkfPos);
         window.draw(ekfCircle);
 
@@ -285,5 +298,12 @@ int main() {
         window.display();
     }
 
+    if (errorCount > 0) {
+        double meanError = sumError / errorCount;
+        double accuracy = (1.0 - meanError) * 100.0;
+        if (accuracy < 0.0) accuracy = 0.0;
+        std::cout << std::fixed << std::setprecision(2);
+        std::cout << "Accuracy: " << accuracy << "%" << std::endl;
+    }
     return 0;
 }
