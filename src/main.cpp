@@ -3,6 +3,7 @@
 #include <sstream>
 #include <random>
 #include <iomanip>
+#include <cmath>
 #include "map.h"
 #include "trajectory.h"
 #include "sensorsim.h"
@@ -166,11 +167,13 @@ int main() {
                 float dx = pos.first - est_x;
                 float dy = pos.second - est_y;
                 if (std::hypot(dx, dy) < LANDMARK_DETECTION_RANGE) {
-                    float true_z_x = pos.first - gt_x;
-                    float true_z_y = pos.second - gt_y;
-                    float z_x = true_z_x + landmark_noise(gen);
-                    float z_y = true_z_y + landmark_noise(gen);
-                    ekf.updateLandmark(Eigen::Vector2f(z_x, z_y), pos.first, pos.second);
+                    float dx_l = pos.first - gt_x;
+                    float dy_l = pos.second - gt_y;
+                    float true_range = std::sqrt(dx_l*dx_l + dy_l*dy_l);
+                    float true_bearing = std::atan2(dy_l, dx_l);
+                    float noisy_range = true_range + landmark_noise(gen);
+                    float noisy_bearing = true_bearing + landmark_noise(gen);
+                    ekf.updateLandmark(Eigen::Vector2f(noisy_range, noisy_bearing), pos.first, pos.second);
                     
                     // Add to visualization of detected landmarks
                     sf::Vector2f ekfPosScreen(
